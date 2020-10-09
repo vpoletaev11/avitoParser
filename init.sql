@@ -1,0 +1,15 @@
+CREATE DATABASE IF NOT EXISTS avitoParser;
+
+USE avitoParser;
+
+CREATE TABLE IF NOT EXISTS link (
+	PRIMARY KEY(link),
+	link VARCHAR(500) NOT NULL,
+	price INT DEFAULT 0
+);
+
+CREATE TABLE IF NOT EXISTS email (
+	PRIMARY KEY(email),
+	email VARCHAR(500) NOT NULL,
+    link VARCHAR(500) NOT NULL
+);
