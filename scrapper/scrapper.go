@@ -27,6 +27,9 @@ func GetPrice(link string) (int, error) {
 	}
 
 	body, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return 0, err
+	}
 	bodyString := string(body)
 
 	priceStr, _ := getStringBetweenTwoStrings(bodyString, `"dynx_price":`, ",")
