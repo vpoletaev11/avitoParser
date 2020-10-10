@@ -5,11 +5,13 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
+
+	"github.com/vpoletaev11/avitoParser/scrapper"
 )
 
 const (
 	insertEmail        = "INSERT INTO email(email, link) VALUES(?, ?);"
-	insertLink         = "INSERT INTO link(link) VALUES(?);"
+	insertLink         = "INSERT INTO link(link, price) VALUES(?, ?);"
 	updateLinkForEmail = "UPDATE email SET link=? WHERE email=?;"
 )
 
@@ -24,7 +26,13 @@ func Handler(db *sql.DB) http.HandlerFunc {
 		email := r.PostForm.Get("email")
 		link := r.PostForm.Get("link")
 
-		_, err = db.Exec(insertLink, link)
+		price, err := scrapper.GetPrice(link)
+		if err != nil {
+			fmt.Fprintf(w, "Bad link")
+			return
+		}
+
+		_, err = db.Exec(insertLink, link, price)
 		if err != nil {
 			// if link already exists in database- do nothing
 			if strings.Contains(err.Error(), "Error 1062") {

@@ -5,7 +5,7 @@ USE avitoParser;
 CREATE TABLE IF NOT EXISTS link (
 	PRIMARY KEY(link),
 	link VARCHAR(500) NOT NULL,
-	price INT DEFAULT 0
+	price INT NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS email (
