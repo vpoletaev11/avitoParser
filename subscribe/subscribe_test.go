@@ -67,8 +67,6 @@ func TestHandlerBadLink(t *testing.T) {
 	}
 	bodyString := string(bodyBytes)
 	assert.Equal(t, "Bad link", bodyString)
-
-	time.Sleep(1 * time.Second)
 }
 
 func TestHandlerLinkExists(t *testing.T) {
