@@ -7,6 +7,7 @@ import (
 
 	_ "github.com/go-sql-driver/mysql"
 
+	"github.com/vpoletaev11/avitoParser/scrapper"
 	"github.com/vpoletaev11/avitoParser/subscribe"
 )
 
@@ -20,6 +21,8 @@ func main() {
 		panic(err)
 	}
 	fmt.Println("Successfully connected to MySql database")
+
+	scrapper.ComparePrices(db)
 
 	http.HandleFunc("/", subscribe.Handler(db))
 
