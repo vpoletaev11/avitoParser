@@ -8,6 +8,7 @@ import (
 	"log"
 	"net/http"
 	"net/smtp"
+	"os"
 	"strconv"
 	"strings"
 )
@@ -121,8 +122,8 @@ func sendMails(db *sql.DB, changedPriceLinks []linkPrice) error {
 
 func sendMail(receiver []string, link string, cost int) {
 	// Sender data.
-	from := "SENDER_MAIL"
-	password := "MAIL_PASSWORD"
+	from := os.Getenv("SENDER_MAIL")
+	password := os.Getenv("MAIL_PASSWORD")
 
 	// smtp server configuration.
 	smtpHost := "smtp.gmail.com"

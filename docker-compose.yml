@@ -8,6 +8,10 @@ services:
             - 8080:8080
         links:
             - mysql
+        environment:
+            SENDER_MAIL: enter email (gmail only) from which will be send emails
+            MAIL_PASSWORD: enter pass for it email
+
     mysql:
         image: mysql/mysql-server:5.6
         container_name: mysql
