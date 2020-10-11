@@ -2,10 +2,10 @@ package subscribe
 
 import (
 	"database/sql"
-	"fmt"
 	"net/http"
 	"strings"
 
+	"github.com/vpoletaev11/avitoParser/errhand"
 	"github.com/vpoletaev11/avitoParser/scrapper"
 )
 
@@ -19,7 +19,7 @@ func Handler(db *sql.DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		err := r.ParseForm()
 		if err != nil {
-			fmt.Fprintf(w, err.Error())
+			errhand.InternalError(err, w)
 			return
 		}
 
@@ -28,7 +28,7 @@ func Handler(db *sql.DB) http.HandlerFunc {
 
 		price, err := scrapper.GetPrice(link)
 		if err != nil {
-			fmt.Fprintln(w, err)
+			errhand.InternalError(err, w)
 			return
 		}
 
@@ -38,7 +38,7 @@ func Handler(db *sql.DB) http.HandlerFunc {
 			if strings.Contains(err.Error(), "Error 1062") {
 
 			} else {
-				fmt.Fprintf(w, err.Error())
+				errhand.InternalError(err, w)
 				return
 			}
 		}
@@ -49,13 +49,15 @@ func Handler(db *sql.DB) http.HandlerFunc {
 			if strings.Contains(err.Error(), "Error 1062") {
 				_, err := db.Exec(updateLinkForEmail, link, email)
 				if err != nil {
-					fmt.Fprintf(w, err.Error())
+					errhand.InternalError(err, w)
 					return
 				}
 				return
 			}
-			fmt.Fprintf(w, err.Error())
+			errhand.InternalError(err, w)
 			return
 		}
+
+		w.WriteHeader(http.StatusOK)
 	}
 }

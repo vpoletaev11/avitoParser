@@ -5,13 +5,14 @@ import (
 	"database/sql"
 	"fmt"
 	"io/ioutil"
-	"log"
 	"net/http"
 	"net/smtp"
 	"os"
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/vpoletaev11/avitoParser/errhand"
 )
 
 const (
@@ -33,29 +34,21 @@ func ComparePrices(db *sql.DB) {
 	}
 
 	for {
-		links, err := getLinksAndPriceFromDB(db)
-		if err != nil {
-			log.Println(err)
-		}
+		links := getLinksAndPriceFromDB(db)
 
-		changedPriceLinks, err := linksWithChangedPrice(db, links)
-		if err != nil {
-			log.Println(err)
-		}
+		changedPriceLinks := linksWithChangedPrice(db, links)
 
-		err = sendMails(db, changedPriceLinks)
-		if err != nil {
-			log.Println(err)
-		}
+		sendMails(db, changedPriceLinks)
 
 		time.Sleep(time.Duration(minsToLoop) * time.Minute)
 	}
 }
 
-func getLinksAndPriceFromDB(db *sql.DB) ([]linkPrice, error) {
+func getLinksAndPriceFromDB(db *sql.DB) []linkPrice {
 	rows, err := db.Query(getLinksAndPrice)
 	if err != nil {
-		return []linkPrice{}, err
+		errhand.InternalErrorLog(err)
+		return []linkPrice{}
 	}
 	defer rows.Close()
 
@@ -67,16 +60,17 @@ func getLinksAndPriceFromDB(db *sql.DB) ([]linkPrice, error) {
 			&lp.price,
 		)
 		if err != nil {
-			return []linkPrice{}, err
+			errhand.InternalErrorLog(err)
+			continue
 		}
 
 		links = append(links, lp)
 	}
 
-	return links, nil
+	return links
 }
 
-func linksWithChangedPrice(db *sql.DB, links []linkPrice) ([]linkPrice, error) {
+func linksWithChangedPrice(db *sql.DB, links []linkPrice) []linkPrice {
 	secToGetOnePageStr := os.Getenv("SEC_TO_GET_ONE_PAGE")
 	secToGetOnePage, err := strconv.Atoi(secToGetOnePageStr)
 	if err != nil {
@@ -87,7 +81,7 @@ func linksWithChangedPrice(db *sql.DB, links []linkPrice) ([]linkPrice, error) {
 	for _, lp := range links {
 		price, err := GetPrice(lp.link)
 		if err != nil {
-			log.Println(err)
+			errhand.InternalErrorLog(err)
 			continue
 		}
 
@@ -95,7 +89,8 @@ func linksWithChangedPrice(db *sql.DB, links []linkPrice) ([]linkPrice, error) {
 			lp.price = price
 			_, err := db.Exec(updatePrice, lp.price, lp.link)
 			if err != nil {
-				return []linkPrice{}, err
+				errhand.InternalErrorLog(err)
+				continue
 			}
 			changedPriceLinks = append(changedPriceLinks, lp)
 		}
@@ -103,14 +98,15 @@ func linksWithChangedPrice(db *sql.DB, links []linkPrice) ([]linkPrice, error) {
 		time.Sleep(time.Duration(secToGetOnePage) * time.Second)
 	}
 
-	return changedPriceLinks, nil
+	return changedPriceLinks
 }
 
-func sendMails(db *sql.DB, changedPriceLinks []linkPrice) error {
+func sendMails(db *sql.DB, changedPriceLinks []linkPrice) {
 	for _, lp := range changedPriceLinks {
 		rows, err := db.Query(getEmailsRelWithLink, lp.link)
 		if err != nil {
-			return err
+			errhand.InternalErrorLog(err)
+			return
 		}
 		defer rows.Close()
 
@@ -121,7 +117,8 @@ func sendMails(db *sql.DB, changedPriceLinks []linkPrice) error {
 				&email,
 			)
 			if err != nil {
-				return err
+				errhand.InternalErrorLog(err)
+				continue
 			}
 
 			emails = append(emails, email)
@@ -129,8 +126,6 @@ func sendMails(db *sql.DB, changedPriceLinks []linkPrice) error {
 
 		sendMail(emails, lp.link, lp.price)
 	}
-
-	return nil
 }
 
 func sendMail(receiver []string, link string, price int) {
@@ -143,7 +138,7 @@ func sendMail(receiver []string, link string, price int) {
 	smtpPort := "587"
 
 	fromL := fmt.Sprintf("From: <%s>\r\n", from)
-	subject := "Avito parser\r\n"
+	subject := "Subject: Avito parser\r\n"
 	body := "New price of " + link + " amount " + strconv.Itoa(price) + " rub."
 
 	message := []byte(fromL + subject + "\r\n" + body)
@@ -157,7 +152,6 @@ func sendMail(receiver []string, link string, price int) {
 		fmt.Println(err)
 		return
 	}
-	fmt.Println("Email Sent Successfully!")
 }
 
 func GetPrice(link string) (int, error) {

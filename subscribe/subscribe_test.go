@@ -42,6 +42,7 @@ func TestHandlerSuccess(t *testing.T) {
 		log.Fatal(err)
 	}
 	bodyString := string(bodyBytes)
+	assert.Equal(t, http.StatusOK, w.Code)
 	assert.Equal(t, "", bodyString)
 
 	time.Sleep(1 * time.Second)
@@ -66,7 +67,8 @@ func TestHandlerBadLink(t *testing.T) {
 		log.Fatal(err)
 	}
 	bodyString := string(bodyBytes)
-	assert.Equal(t, "Get \"wrong%20link\": unsupported protocol scheme \"\"\n", bodyString)
+	assert.Equal(t, http.StatusInternalServerError, w.Code)
+	assert.Equal(t, "INTERNAL ERROR. Please try later\n", bodyString)
 }
 
 func TestHandlerLinkExists(t *testing.T) {
@@ -93,6 +95,7 @@ func TestHandlerLinkExists(t *testing.T) {
 		log.Fatal(err)
 	}
 	bodyString := string(bodyBytes)
+	assert.Equal(t, http.StatusOK, w.Code)
 	assert.Equal(t, "", bodyString)
 
 	time.Sleep(1 * time.Second)
@@ -121,7 +124,8 @@ func TestHandlerInsertLinkErrorDB(t *testing.T) {
 		log.Fatal(err)
 	}
 	bodyString := string(bodyBytes)
-	assert.Equal(t, "Some error with DB connection", bodyString)
+	assert.Equal(t, http.StatusInternalServerError, w.Code)
+	assert.Equal(t, "INTERNAL ERROR. Please try later\n", bodyString)
 
 	time.Sleep(1 * time.Second)
 }
@@ -151,6 +155,7 @@ func TestHandlerEmailExists(t *testing.T) {
 		log.Fatal(err)
 	}
 	bodyString := string(bodyBytes)
+	assert.Equal(t, http.StatusOK, w.Code)
 	assert.Equal(t, "", bodyString)
 
 	time.Sleep(1 * time.Second)
@@ -181,7 +186,8 @@ func TestHandlerEmailExistsErrorDB(t *testing.T) {
 		log.Fatal(err)
 	}
 	bodyString := string(bodyBytes)
-	assert.Equal(t, "Some error with DB connection", bodyString)
+	assert.Equal(t, http.StatusInternalServerError, w.Code)
+	assert.Equal(t, "INTERNAL ERROR. Please try later\n", bodyString)
 
 	time.Sleep(1 * time.Second)
 }
@@ -210,7 +216,8 @@ func TestHandlerInsertEmailErrorDB(t *testing.T) {
 		log.Fatal(err)
 	}
 	bodyString := string(bodyBytes)
-	assert.Equal(t, "Some error with DB connection", bodyString)
+	assert.Equal(t, http.StatusInternalServerError, w.Code)
+	assert.Equal(t, "INTERNAL ERROR. Please try later\n", bodyString)
 
 	time.Sleep(1 * time.Second)
 }
