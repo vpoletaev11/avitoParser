@@ -29,7 +29,6 @@ func Handler(db *sql.DB) http.HandlerFunc {
 		price, err := scrapper.GetPrice(link)
 		if err != nil {
 			fmt.Fprintln(w, err)
-			fmt.Fprintln(w, "Bad link")
 			return
 		}
 

@@ -26,6 +26,12 @@ type linkPrice struct {
 }
 
 func ComparePrices(db *sql.DB) {
+	minsToLoopStr := os.Getenv("MIN_TO_SCRAPPING_ALL_LINKS")
+	minsToLoop, err := strconv.Atoi(minsToLoopStr)
+	if err != nil {
+		panic(err)
+	}
+
 	for {
 		links, err := getLinksAndPriceFromDB(db)
 		if err != nil {
@@ -40,12 +46,6 @@ func ComparePrices(db *sql.DB) {
 		err = sendMails(db, changedPriceLinks)
 		if err != nil {
 			log.Println(err)
-		}
-
-		minsToLoopStr := os.Getenv("MIN_TO_SCRAPPING_ALL_LINKS")
-		minsToLoop, err := strconv.Atoi(minsToLoopStr)
-		if err != nil {
-			panic(err)
 		}
 
 		time.Sleep(time.Duration(minsToLoop) * time.Minute)
@@ -77,6 +77,12 @@ func getLinksAndPriceFromDB(db *sql.DB) ([]linkPrice, error) {
 }
 
 func linksWithChangedPrice(db *sql.DB, links []linkPrice) ([]linkPrice, error) {
+	secToGetOnePageStr := os.Getenv("SEC_TO_GET_ONE_PAGE")
+	secToGetOnePage, err := strconv.Atoi(secToGetOnePageStr)
+	if err != nil {
+		panic(err)
+	}
+
 	changedPriceLinks := []linkPrice{}
 	for _, lp := range links {
 		price, err := GetPrice(lp.link)
@@ -92,12 +98,6 @@ func linksWithChangedPrice(db *sql.DB, links []linkPrice) ([]linkPrice, error) {
 				return []linkPrice{}, err
 			}
 			changedPriceLinks = append(changedPriceLinks, lp)
-		}
-
-		secToGetOnePageStr := os.Getenv("SEC_TO_GET_ONE_PAGE")
-		secToGetOnePage, err := strconv.Atoi(secToGetOnePageStr)
-		if err != nil {
-			panic(err)
 		}
 
 		time.Sleep(time.Duration(secToGetOnePage) * time.Second)
@@ -133,7 +133,7 @@ func sendMails(db *sql.DB, changedPriceLinks []linkPrice) error {
 	return nil
 }
 
-func sendMail(receiver []string, link string, cost int) {
+func sendMail(receiver []string, link string, price int) {
 	// Sender data.
 	from := os.Getenv("SENDER_MAIL")
 	password := os.Getenv("MAIL_PASSWORD")
@@ -144,7 +144,7 @@ func sendMail(receiver []string, link string, cost int) {
 
 	fromL := fmt.Sprintf("From: <%s>\r\n", from)
 	subject := "Avito parser\r\n"
-	body := "New price of " + link + " amount " + strconv.Itoa(cost) + " rub."
+	body := "New price of " + link + " amount " + strconv.Itoa(price) + " rub."
 
 	message := []byte(fromL + subject + "\r\n" + body)
 
@@ -177,6 +177,7 @@ func GetPrice(link string) (int, error) {
 	if err != nil {
 		return 0, err
 	}
+	defer resp.Body.Close()
 
 	body, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
@@ -184,7 +185,7 @@ func GetPrice(link string) (int, error) {
 	}
 	bodyString := string(body)
 
-	priceStr, _ := getStringBetweenTwoStrings(bodyString, `"dynx_price":`, ",")
+	priceStr := getStringBetweenTwoStrings(bodyString, `"dynx_price":`, ",")
 	price, err := strconv.Atoi(priceStr)
 	if err != nil {
 		return 0, err
@@ -193,16 +194,16 @@ func GetPrice(link string) (int, error) {
 	return price, nil
 }
 
-func getStringBetweenTwoStrings(str string, startS string, endS string) (result string, found bool) {
+func getStringBetweenTwoStrings(str string, startS string, endS string) (result string) {
 	s := strings.Index(str, startS)
 	if s == -1 {
-		return result, false
+		return ""
 	}
 	newS := str[s+len(startS):]
 	e := strings.Index(newS, endS)
 	if e == -1 {
-		return result, false
+		return ""
 	}
 	result = newS[:e]
-	return result, true
+	return result
 }

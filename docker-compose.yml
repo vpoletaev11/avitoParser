@@ -9,8 +9,8 @@ services:
         links:
             - mysql
         environment:
-            SENDER_MAIL: enter email (gmail only) from which will be send emails
-            MAIL_PASSWORD: enter pass for it email
+            SENDER_MAIL: email (gmail only) used as sender
+            MAIL_PASSWORD: email account password
             # below settings allow to scan maximum ~300 links, if you need more, you should reconfigure it
             MIN_TO_SCRAPPING_ALL_LINKS: 5 # delay in minutes before next loop of crapping all links
             SEC_TO_GET_ONE_PAGE: 1 # delay in seconds to scan one page

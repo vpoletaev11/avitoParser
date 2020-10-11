@@ -66,7 +66,7 @@ func TestHandlerBadLink(t *testing.T) {
 		log.Fatal(err)
 	}
 	bodyString := string(bodyBytes)
-	assert.Equal(t, "Bad link", bodyString)
+	assert.Equal(t, "Get \"wrong%20link\": unsupported protocol scheme \"\"\n", bodyString)
 }
 
 func TestHandlerLinkExists(t *testing.T) {
