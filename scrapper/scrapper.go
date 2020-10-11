@@ -11,6 +11,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"time"
 )
 
 const (
@@ -25,26 +26,33 @@ type linkPrice struct {
 }
 
 func ComparePrices(db *sql.DB) {
-	links, err := getLinksAndPriceFromDB(db)
-	if err != nil {
-		log.Println(err)
-		return
-	}
+	for {
+		links, err := getLinksAndPriceFromDB(db)
+		if err != nil {
+			log.Println(err)
+			return
+		}
 
-	changedPriceLinks, err := linksWithChangedPrice(db, links)
-	if err != nil {
-		log.Println(err)
-		return
-	}
+		changedPriceLinks, err := linksWithChangedPrice(db, links)
+		if err != nil {
+			log.Println(err)
+			return
+		}
 
-	err = sendMails(db, changedPriceLinks)
-	if err != nil {
-		log.Println(err)
-		return
-	}
+		err = sendMails(db, changedPriceLinks)
+		if err != nil {
+			log.Println(err)
+			return
+		}
 
-	fmt.Println(links)
-	fmt.Println(changedPriceLinks)
+		minsToLoopStr := os.Getenv("MIN_TO_SCRAPPING_ALL_LINKS")
+		minsToLoop, err := strconv.Atoi(minsToLoopStr)
+		if err != nil {
+			panic(err)
+		}
+
+		time.Sleep(time.Duration(minsToLoop) * time.Minute)
+	}
 }
 
 func getLinksAndPriceFromDB(db *sql.DB) ([]linkPrice, error) {
@@ -88,6 +96,14 @@ func linksWithChangedPrice(db *sql.DB, links []linkPrice) ([]linkPrice, error) {
 			}
 			changedPriceLinks = append(changedPriceLinks, lp)
 		}
+
+		secToGetOnePageStr := os.Getenv("SEC_TO_GET_ONE_PAGE")
+		secToGetOnePage, err := strconv.Atoi(secToGetOnePageStr)
+		if err != nil {
+			panic(err)
+		}
+
+		time.Sleep(time.Duration(secToGetOnePage) * time.Second)
 	}
 
 	return changedPriceLinks, nil
