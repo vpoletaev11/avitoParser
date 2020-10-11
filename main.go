@@ -12,7 +12,7 @@ import (
 )
 
 const (
-	mySQLAddr = "user:@tcp(localhost:3306)"
+	mySQLAddr = "root:@tcp(mysql:3306)"
 )
 
 func main() {
