@@ -30,19 +30,16 @@ func ComparePrices(db *sql.DB) {
 		links, err := getLinksAndPriceFromDB(db)
 		if err != nil {
 			log.Println(err)
-			return
 		}
 
 		changedPriceLinks, err := linksWithChangedPrice(db, links)
 		if err != nil {
 			log.Println(err)
-			return
 		}
 
 		err = sendMails(db, changedPriceLinks)
 		if err != nil {
 			log.Println(err)
-			return
 		}
 
 		minsToLoopStr := os.Getenv("MIN_TO_SCRAPPING_ALL_LINKS")

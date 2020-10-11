@@ -22,7 +22,7 @@ func main() {
 	}
 	fmt.Println("Successfully connected to MySql database")
 
-	scrapper.ComparePrices(db)
+	go scrapper.ComparePrices(db)
 
 	http.HandleFunc("/", subscribe.Handler(db))
 
