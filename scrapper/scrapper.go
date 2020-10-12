@@ -26,6 +26,11 @@ type linkPrice struct {
 	price int
 }
 
+// ComparePrices checks if links in database have actual prices using parsing avito.ru.
+// If links prices aren't actual:
+// 1) rewrite link prices in db;
+// 2) send emails to addresses related with changed price links.
+// This func uses system variables to set timeouts (you can configure it in docker-compose.yml).
 func ComparePrices(db *sql.DB) {
 	minsToLoopStr := os.Getenv("MIN_TO_SCRAPPING_ALL_LINKS")
 	minsToLoop, err := strconv.Atoi(minsToLoopStr)
@@ -44,6 +49,7 @@ func ComparePrices(db *sql.DB) {
 	}
 }
 
+// getLinksAndPriceFromDB gets all links and prices from database.
 func getLinksAndPriceFromDB(db *sql.DB) []linkPrice {
 	rows, err := db.Query(getLinksAndPrice)
 	if err != nil {
@@ -70,6 +76,9 @@ func getLinksAndPriceFromDB(db *sql.DB) []linkPrice {
 	return links
 }
 
+// linksWithChangedPrice checks if inputted links have actual price by comparing it prices with prices getted by parsing avito.ru.
+// If inputted links haven't actual price linksWithChangedPrice writes for them actual price in db.
+// This func uses system variables to set timeouts (you can configure it in docker-compose.yml).
 func linksWithChangedPrice(db *sql.DB, links []linkPrice) []linkPrice {
 	secToGetOnePageStr := os.Getenv("SEC_TO_GET_ONE_PAGE")
 	secToGetOnePage, err := strconv.Atoi(secToGetOnePageStr)
@@ -101,6 +110,7 @@ func linksWithChangedPrice(db *sql.DB, links []linkPrice) []linkPrice {
 	return changedPriceLinks
 }
 
+// sendMails gets from db email addresses related with inserted links and sends to them notifications about changing price.
 func sendMails(db *sql.DB, changedPriceLinks []linkPrice) {
 	for _, lp := range changedPriceLinks {
 		rows, err := db.Query(getEmailsRelWithLink, lp.link)
@@ -128,6 +138,8 @@ func sendMails(db *sql.DB, changedPriceLinks []linkPrice) {
 	}
 }
 
+// sendMail sends notifications about changing price to receivers.
+// This func uses system variables to get sender email-addres and password (you can configure it in docker-compose.yml).
 func sendMail(receiver []string, link string, price int) {
 	// Sender data.
 	from := os.Getenv("SENDER_MAIL")
@@ -154,6 +166,7 @@ func sendMail(receiver []string, link string, price int) {
 	}
 }
 
+// GetPrice parses avito.ru ad page to get price.
 func GetPrice(link string) (int, error) {
 	tr := &http.Transport{
 		TLSClientConfig: &tls.Config{

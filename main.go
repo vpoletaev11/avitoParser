@@ -13,10 +13,11 @@ import (
 
 const (
 	mySQLAddr = "root:@tcp(mysql:3306)"
+	dbName    = "avitoParser"
 )
 
 func main() {
-	db, err := sql.Open("mysql", mySQLAddr+"/avitoParser")
+	db, err := sql.Open("mysql", mySQLAddr+"/"+dbName)
 	if err != nil {
 		panic(err)
 	}

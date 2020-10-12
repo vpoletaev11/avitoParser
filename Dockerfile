@@ -5,7 +5,6 @@ WORKDIR /go/src/github.com/vpoletaev11/avitoParser
 ADD . /go/src/github.com/vpoletaev11/avitoParser
 
 # Build the project inside the container.
-# RUN GOOS=linux go build  .
 RUN GOOS=linux go build .
 
 

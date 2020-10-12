@@ -15,6 +15,9 @@ const (
 	updateLinkForEmail = "UPDATE email SET link=? WHERE email=?;"
 )
 
+// Handler receives subscriptions to price updating and puts them into database after validation.
+// Subscriptions should come via POST method and contains [email] and [link] fields.
+// Handler can store only one link for one email addres.
 func Handler(db *sql.DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		err := r.ParseForm()
@@ -26,6 +29,7 @@ func Handler(db *sql.DB) http.HandlerFunc {
 		email := r.PostForm.Get("email")
 		link := r.PostForm.Get("link")
 
+		// link validation
 		price, err := scrapper.GetPrice(link)
 		if err != nil {
 			errhand.InternalError(err, w)
