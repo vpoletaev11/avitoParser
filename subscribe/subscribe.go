@@ -10,9 +10,11 @@ import (
 )
 
 const (
-	insertEmail        = "INSERT INTO email(email, link) VALUES(?, ?);"
-	insertLink         = "INSERT INTO link(link, price) VALUES(?, ?);"
-	updateLinkForEmail = "UPDATE email SET link=? WHERE email=?;"
+	insertEmail            = "INSERT INTO email(email, link) VALUES(?, ?);"
+	insertLink             = "INSERT INTO link(link, price) VALUES(?, ?);"
+	updateLinkForEmail     = "UPDATE email SET link=? WHERE email=?;"
+	getEmailsRelatedToLink = "SELECT COUNT(email) FROM email WHERE link=?;"
+	deleteLink             = "DELETE FROM link WHERE link=?;"
 )
 
 // Handler receives subscriptions to price updating and puts them into database after validation.
@@ -55,6 +57,20 @@ func Handler(db *sql.DB) http.HandlerFunc {
 				if err != nil {
 					errhand.InternalError(err, w)
 					return
+				}
+
+				countEmails := 0
+				err = db.QueryRow(getEmailsRelatedToLink, link).Scan(&countEmails)
+				if err != nil {
+					errhand.InternalError(err, w)
+					return
+				}
+				if countEmails <= 1 {
+					_, err := db.Exec(deleteLink, link)
+					if err != nil {
+						errhand.InternalError(err, w)
+						return
+					}
 				}
 				return
 			}
