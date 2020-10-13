@@ -18,7 +18,7 @@ import (
 const (
 	getLinksAndPrice     = "SELECT * FROM link;"
 	updatePrice          = "UPDATE link SET price=? WHERE link=?;"
-	getEmailsRelWithLink = "SELECT email FROM email WHERE link=?"
+	getEmailsRelWithLink = "SELECT email FROM email WHERE link=?;"
 )
 
 type linkPrice struct {
@@ -26,12 +26,39 @@ type linkPrice struct {
 	price int
 }
 
+type Dep struct {
+	DB     *sql.DB
+	Client *http.Client
+}
+
+func NewDep() Dep {
+	mySQLAddr := os.Getenv("MYSQL_ADDR")
+	dbName := os.Getenv("DB_NAME")
+	db, err := sql.Open("mysql", mySQLAddr+"/"+dbName)
+	if err != nil {
+		panic(err)
+	}
+	fmt.Println("Successfully connected to MySql database")
+
+	tr := &http.Transport{
+		TLSClientConfig: &tls.Config{
+			MaxVersion: tls.VersionTLS12,
+		},
+	}
+	client := &http.Client{Transport: tr}
+
+	return Dep{
+		DB:     db,
+		Client: client,
+	}
+}
+
 // ComparePrices checks if links in database have actual prices using parsing avito.ru.
 // If links prices aren't actual:
 // 1) rewrite link prices in db;
 // 2) send emails to addresses related with changed price links.
 // This func uses system variables to set timeouts (you can configure it in docker-compose.yml).
-func ComparePrices(db *sql.DB) {
+func ComparePrices(dep Dep) {
 	minsToLoopStr := os.Getenv("MIN_TO_SCRAPPING_ALL_LINKS")
 	minsToLoop, err := strconv.Atoi(minsToLoopStr)
 	if err != nil {
@@ -39,11 +66,11 @@ func ComparePrices(db *sql.DB) {
 	}
 
 	for {
-		links := getLinksAndPriceFromDB(db)
+		links := getLinksAndPriceFromDB(dep.DB)
 
-		changedPriceLinks := linksWithChangedPrice(db, links)
+		changedPriceLinks := linksWithChangedPrice(dep, links)
 
-		sendMails(db, changedPriceLinks)
+		sendMails(dep.DB, changedPriceLinks)
 
 		time.Sleep(time.Duration(minsToLoop) * time.Minute)
 	}
@@ -79,7 +106,7 @@ func getLinksAndPriceFromDB(db *sql.DB) []linkPrice {
 // linksWithChangedPrice checks if inputted links have actual price by comparing it prices with prices getted by parsing avito.ru.
 // If inputted links haven't actual price linksWithChangedPrice writes for them actual price in db.
 // This func uses system variables to set timeouts (you can configure it in docker-compose.yml).
-func linksWithChangedPrice(db *sql.DB, links []linkPrice) []linkPrice {
+func linksWithChangedPrice(dep Dep, links []linkPrice) []linkPrice {
 	secToGetOnePageStr := os.Getenv("SEC_TO_GET_ONE_PAGE")
 	secToGetOnePage, err := strconv.Atoi(secToGetOnePageStr)
 	if err != nil {
@@ -88,7 +115,7 @@ func linksWithChangedPrice(db *sql.DB, links []linkPrice) []linkPrice {
 
 	changedPriceLinks := []linkPrice{}
 	for _, lp := range links {
-		price, err := GetPrice(lp.link)
+		price, err := dep.GetPrice(lp.link)
 		if err != nil {
 			errhand.InternalErrorLog(err)
 			continue
@@ -96,7 +123,7 @@ func linksWithChangedPrice(db *sql.DB, links []linkPrice) []linkPrice {
 
 		if price != lp.price {
 			lp.price = price
-			_, err := db.Exec(updatePrice, lp.price, lp.link)
+			_, err := dep.DB.Exec(updatePrice, lp.price, lp.link)
 			if err != nil {
 				errhand.InternalErrorLog(err)
 				continue
@@ -167,20 +194,13 @@ func sendMail(receiver []string, link string, price int) {
 }
 
 // GetPrice parses avito.ru ad page to get price.
-func GetPrice(link string) (int, error) {
-	tr := &http.Transport{
-		TLSClientConfig: &tls.Config{
-			MaxVersion: tls.VersionTLS12,
-		},
-	}
-	client := &http.Client{Transport: tr}
-
+func (d Dep) GetPrice(link string) (int, error) {
 	req, err := http.NewRequest("GET", link, nil)
 	if err != nil {
 		return 0, err
 	}
 
-	resp, err := client.Do(req)
+	resp, err := d.Client.Do(req)
 	if err != nil {
 		return 0, err
 	}

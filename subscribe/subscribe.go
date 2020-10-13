@@ -1,7 +1,6 @@
 package subscribe
 
 import (
-	"database/sql"
 	"net/http"
 	"strings"
 
@@ -20,7 +19,7 @@ const (
 // Handler receives subscriptions to price updating and puts them into database after validation.
 // Subscriptions should come via POST method and contains [email] and [link] fields.
 // Handler can store only one link for one email addres.
-func Handler(db *sql.DB) http.HandlerFunc {
+func Handler(dep scrapper.Dep) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		err := r.ParseForm()
 		if err != nil {
@@ -32,13 +31,13 @@ func Handler(db *sql.DB) http.HandlerFunc {
 		link := r.PostForm.Get("link")
 
 		// link validation
-		price, err := scrapper.GetPrice(link)
+		price, err := dep.GetPrice(link)
 		if err != nil {
 			errhand.InternalError(err, w)
 			return
 		}
 
-		_, err = db.Exec(insertLink, link, price)
+		_, err = dep.DB.Exec(insertLink, link, price)
 		if err != nil {
 			// if link already exists in database- do nothing
 			if strings.Contains(err.Error(), "Error 1062") {
@@ -49,24 +48,24 @@ func Handler(db *sql.DB) http.HandlerFunc {
 			}
 		}
 
-		_, err = db.Exec(insertEmail, email, link)
+		_, err = dep.DB.Exec(insertEmail, email, link)
 		if err != nil {
 			// if email already exists in database- rewrite related to it link
 			if strings.Contains(err.Error(), "Error 1062") {
-				_, err := db.Exec(updateLinkForEmail, link, email)
+				_, err := dep.DB.Exec(updateLinkForEmail, link, email)
 				if err != nil {
 					errhand.InternalError(err, w)
 					return
 				}
 
 				countEmails := 0
-				err = db.QueryRow(getEmailsRelatedToLink, link).Scan(&countEmails)
+				err = dep.DB.QueryRow(getEmailsRelatedToLink, link).Scan(&countEmails)
 				if err != nil {
 					errhand.InternalError(err, w)
 					return
 				}
 				if countEmails <= 1 {
-					_, err := db.Exec(deleteLink, link)
+					_, err := dep.DB.Exec(deleteLink, link)
 					if err != nil {
 						errhand.InternalError(err, w)
 						return

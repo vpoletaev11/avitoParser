@@ -1,7 +1,6 @@
 package main
 
 import (
-	"database/sql"
 	"fmt"
 	"net/http"
 
@@ -11,21 +10,12 @@ import (
 	"github.com/vpoletaev11/avitoParser/subscribe"
 )
 
-const (
-	mySQLAddr = "root:@tcp(mysql:3306)"
-	dbName    = "avitoParser"
-)
-
 func main() {
-	db, err := sql.Open("mysql", mySQLAddr+"/"+dbName)
-	if err != nil {
-		panic(err)
-	}
-	fmt.Println("Successfully connected to MySql database")
+	dep := scrapper.NewDep()
 
-	go scrapper.ComparePrices(db)
+	go scrapper.ComparePrices(dep)
 
-	http.HandleFunc("/", subscribe.Handler(db))
+	http.HandleFunc("/", subscribe.Handler(dep))
 
 	fmt.Println("Starting server at :8080")
 	http.ListenAndServe(":8080", nil)

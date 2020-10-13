@@ -4,11 +4,12 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-	"github.com/vpoletaev11/avitoParser/scrapper"
+	"github.com/vpoletaev11/avitoParser/test.go"
 )
 
 func TestScrapperSuccess(t *testing.T) {
-	price, err := scrapper.GetPrice("https://www.avito.ru/moskva/kollektsionirovanie/moneta_iz_makdonaldsa_2009709110")
+	dep, _, ts := test.NewDepAndServer()
+	price, err := dep.GetPrice(ts.URL)
 	assert.Nil(t, err)
 	assert.Equal(t, 1000000, price)
 }

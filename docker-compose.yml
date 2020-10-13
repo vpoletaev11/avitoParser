@@ -9,11 +9,16 @@ services:
         links:
             - mysql
         environment:
+            MYSQL_ADDR: root:@tcp(mysql:3306)
+            DB_NAME: "avitoParser"
+
             SENDER_MAIL: email (gmail only) used as sender
             MAIL_PASSWORD: email account password
+            
             # below settings allow to scan maximum ~300 links, if you need more, you should reconfigure it
             MIN_TO_SCRAPPING_ALL_LINKS: 5 # delay in minutes before next loop of crapping all links
             SEC_TO_GET_ONE_PAGE: 1 # delay in seconds to scan one page
+
 
     mysql:
         image: mysql/mysql-server:5.6

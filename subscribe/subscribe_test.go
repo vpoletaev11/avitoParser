@@ -10,23 +10,22 @@ import (
 	"strconv"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/DATA-DOG/go-sqlmock"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/vpoletaev11/avitoParser/subscribe"
+	"github.com/vpoletaev11/avitoParser/test.go"
 )
 
 func TestHandlerSuccess(t *testing.T) {
-	db, sqlMock, err := sqlmock.New()
-	require.NoError(t, err)
-	sqlMock.ExpectExec("INSERT INTO link").WithArgs("https://www.avito.ru/moskva/kollektsionirovanie/moneta_iz_makdonaldsa_2009709110", 1000000).WillReturnResult(sqlmock.NewResult(1, 1))
-	sqlMock.ExpectExec("INSERT INTO email").WithArgs("example.mail.com", "https://www.avito.ru/moskva/kollektsionirovanie/moneta_iz_makdonaldsa_2009709110").WillReturnResult(sqlmock.NewResult(1, 1))
+	dep, sqlMock, ts := test.NewDepAndServer()
+	sqlMock.ExpectExec("INSERT INTO link").WithArgs(ts.URL, 1000000).WillReturnResult(sqlmock.NewResult(1, 1))
+	sqlMock.ExpectExec("INSERT INTO email").WithArgs("example.mail.com", ts.URL).WillReturnResult(sqlmock.NewResult(1, 1))
 
 	data := url.Values{}
 	data.Set("email", "example.mail.com")
-	data.Add("link", "https://www.avito.ru/moskva/kollektsionirovanie/moneta_iz_makdonaldsa_2009709110")
+	data.Add("link", ts.URL)
 	r, err := http.NewRequest("POST", "http://localhost/", strings.NewReader(data.Encode()))
 	require.NoError(t, err)
 	r.Header.Add("Content-Type", "application/x-www-form-urlencoded")
@@ -34,7 +33,7 @@ func TestHandlerSuccess(t *testing.T) {
 
 	w := httptest.NewRecorder()
 
-	sut := subscribe.Handler(db)
+	sut := subscribe.Handler(dep)
 	sut(w, r)
 
 	bodyBytes, err := ioutil.ReadAll(w.Body)
@@ -44,11 +43,10 @@ func TestHandlerSuccess(t *testing.T) {
 	bodyString := string(bodyBytes)
 	assert.Equal(t, http.StatusOK, w.Code)
 	assert.Equal(t, "", bodyString)
-
-	time.Sleep(1 * time.Second)
 }
 
 func TestHandlerBadLink(t *testing.T) {
+	dep, _, _ := test.NewDepAndServer()
 	data := url.Values{}
 	data.Set("email", "example.mail.com")
 	data.Add("link", "wrong link")
@@ -59,7 +57,7 @@ func TestHandlerBadLink(t *testing.T) {
 
 	w := httptest.NewRecorder()
 
-	sut := subscribe.Handler(nil)
+	sut := subscribe.Handler(dep)
 	sut(w, r)
 
 	bodyBytes, err := ioutil.ReadAll(w.Body)
@@ -72,14 +70,13 @@ func TestHandlerBadLink(t *testing.T) {
 }
 
 func TestHandlerLinkExists(t *testing.T) {
-	db, sqlMock, err := sqlmock.New()
-	require.NoError(t, err)
-	sqlMock.ExpectExec("INSERT INTO link").WithArgs("https://www.avito.ru/moskva/kollektsionirovanie/moneta_iz_makdonaldsa_2009709110", 1000000).WillReturnError(fmt.Errorf("Error 1062 ....."))
-	sqlMock.ExpectExec("INSERT INTO email").WithArgs("example.mail.com", "https://www.avito.ru/moskva/kollektsionirovanie/moneta_iz_makdonaldsa_2009709110").WillReturnResult(sqlmock.NewResult(1, 1))
+	dep, sqlMock, ts := test.NewDepAndServer()
+	sqlMock.ExpectExec("INSERT INTO link").WithArgs(ts.URL, 1000000).WillReturnError(fmt.Errorf("Error 1062 ....."))
+	sqlMock.ExpectExec("INSERT INTO email").WithArgs("example.mail.com", ts.URL).WillReturnResult(sqlmock.NewResult(1, 1))
 
 	data := url.Values{}
 	data.Set("email", "example.mail.com")
-	data.Add("link", "https://www.avito.ru/moskva/kollektsionirovanie/moneta_iz_makdonaldsa_2009709110")
+	data.Add("link", ts.URL)
 	r, err := http.NewRequest("POST", "http://localhost/", strings.NewReader(data.Encode()))
 	require.NoError(t, err)
 	r.Header.Add("Content-Type", "application/x-www-form-urlencoded")
@@ -87,7 +84,7 @@ func TestHandlerLinkExists(t *testing.T) {
 
 	w := httptest.NewRecorder()
 
-	sut := subscribe.Handler(db)
+	sut := subscribe.Handler(dep)
 	sut(w, r)
 
 	bodyBytes, err := ioutil.ReadAll(w.Body)
@@ -97,18 +94,15 @@ func TestHandlerLinkExists(t *testing.T) {
 	bodyString := string(bodyBytes)
 	assert.Equal(t, http.StatusOK, w.Code)
 	assert.Equal(t, "", bodyString)
-
-	time.Sleep(1 * time.Second)
 }
 
 func TestHandlerInsertLinkErrorDB(t *testing.T) {
-	db, sqlMock, err := sqlmock.New()
-	require.NoError(t, err)
-	sqlMock.ExpectExec("INSERT INTO link").WithArgs("https://www.avito.ru/moskva/kollektsionirovanie/moneta_iz_makdonaldsa_2009709110", 1000000).WillReturnError(fmt.Errorf("Some error with DB connection"))
+	dep, sqlMock, ts := test.NewDepAndServer()
+	sqlMock.ExpectExec("INSERT INTO link").WithArgs(ts.URL, 1000000).WillReturnError(fmt.Errorf("Some error with DB connection"))
 
 	data := url.Values{}
 	data.Set("email", "example.mail.com")
-	data.Add("link", "https://www.avito.ru/moskva/kollektsionirovanie/moneta_iz_makdonaldsa_2009709110")
+	data.Add("link", ts.URL)
 	r, err := http.NewRequest("POST", "http://localhost/", strings.NewReader(data.Encode()))
 	require.NoError(t, err)
 	r.Header.Add("Content-Type", "application/x-www-form-urlencoded")
@@ -116,7 +110,7 @@ func TestHandlerInsertLinkErrorDB(t *testing.T) {
 
 	w := httptest.NewRecorder()
 
-	sut := subscribe.Handler(db)
+	sut := subscribe.Handler(dep)
 	sut(w, r)
 
 	bodyBytes, err := ioutil.ReadAll(w.Body)
@@ -126,23 +120,20 @@ func TestHandlerInsertLinkErrorDB(t *testing.T) {
 	bodyString := string(bodyBytes)
 	assert.Equal(t, http.StatusInternalServerError, w.Code)
 	assert.Equal(t, "INTERNAL ERROR. Please try later\n", bodyString)
-
-	time.Sleep(1 * time.Second)
 }
 
 func TestHandlerEmailExists(t *testing.T) {
-	db, sqlMock, err := sqlmock.New()
-	require.NoError(t, err)
-	sqlMock.ExpectExec("INSERT INTO link").WithArgs("https://www.avito.ru/moskva/kollektsionirovanie/moneta_iz_makdonaldsa_2009709110", 1000000).WillReturnResult(sqlmock.NewResult(1, 1))
-	sqlMock.ExpectExec("INSERT INTO email").WithArgs("example.mail.com", "https://www.avito.ru/moskva/kollektsionirovanie/moneta_iz_makdonaldsa_2009709110").WillReturnError(fmt.Errorf("Error 1062 ....."))
-	sqlMock.ExpectExec("UPDATE email").WithArgs("https://www.avito.ru/moskva/kollektsionirovanie/moneta_iz_makdonaldsa_2009709110", "example.mail.com").WillReturnResult(sqlmock.NewResult(1, 1))
+	dep, sqlMock, ts := test.NewDepAndServer()
+	sqlMock.ExpectExec("INSERT INTO link").WithArgs(ts.URL, 1000000).WillReturnResult(sqlmock.NewResult(1, 1))
+	sqlMock.ExpectExec("INSERT INTO email").WithArgs("example.mail.com", ts.URL).WillReturnError(fmt.Errorf("Error 1062 ....."))
+	sqlMock.ExpectExec("UPDATE email").WithArgs(ts.URL, "example.mail.com").WillReturnResult(sqlmock.NewResult(1, 1))
 	row := []string{"count"}
-	sqlMock.ExpectQuery("SELECT COUNT").WithArgs("https://www.avito.ru/moskva/kollektsionirovanie/moneta_iz_makdonaldsa_2009709110").WillReturnRows(sqlmock.NewRows(row).AddRow(1))
-	sqlMock.ExpectExec("DELETE FROM link").WithArgs("https://www.avito.ru/moskva/kollektsionirovanie/moneta_iz_makdonaldsa_2009709110").WillReturnResult(sqlmock.NewResult(1, 1))
+	sqlMock.ExpectQuery("SELECT COUNT").WithArgs(ts.URL).WillReturnRows(sqlmock.NewRows(row).AddRow(1))
+	sqlMock.ExpectExec("DELETE FROM link").WithArgs(ts.URL).WillReturnResult(sqlmock.NewResult(1, 1))
 
 	data := url.Values{}
 	data.Set("email", "example.mail.com")
-	data.Add("link", "https://www.avito.ru/moskva/kollektsionirovanie/moneta_iz_makdonaldsa_2009709110")
+	data.Add("link", ts.URL)
 	r, err := http.NewRequest("POST", "http://localhost/", strings.NewReader(data.Encode()))
 	require.NoError(t, err)
 	r.Header.Add("Content-Type", "application/x-www-form-urlencoded")
@@ -150,7 +141,7 @@ func TestHandlerEmailExists(t *testing.T) {
 
 	w := httptest.NewRecorder()
 
-	sut := subscribe.Handler(db)
+	sut := subscribe.Handler(dep)
 	sut(w, r)
 
 	bodyBytes, err := ioutil.ReadAll(w.Body)
@@ -160,20 +151,17 @@ func TestHandlerEmailExists(t *testing.T) {
 	bodyString := string(bodyBytes)
 	assert.Equal(t, http.StatusOK, w.Code)
 	assert.Equal(t, "", bodyString)
-
-	time.Sleep(1 * time.Second)
 }
 
 func TestHandlerEmailExistsUpdateErrorDB(t *testing.T) {
-	db, sqlMock, err := sqlmock.New()
-	require.NoError(t, err)
-	sqlMock.ExpectExec("INSERT INTO link").WithArgs("https://www.avito.ru/moskva/kollektsionirovanie/moneta_iz_makdonaldsa_2009709110", 1000000).WillReturnResult(sqlmock.NewResult(1, 1))
-	sqlMock.ExpectExec("INSERT INTO email").WithArgs("example.mail.com", "https://www.avito.ru/moskva/kollektsionirovanie/moneta_iz_makdonaldsa_2009709110").WillReturnError(fmt.Errorf("Error 1062 ....."))
-	sqlMock.ExpectExec("UPDATE email").WithArgs("https://www.avito.ru/moskva/kollektsionirovanie/moneta_iz_makdonaldsa_2009709110", "example.mail.com").WillReturnError(fmt.Errorf("Some error with DB connection"))
+	dep, sqlMock, ts := test.NewDepAndServer()
+	sqlMock.ExpectExec("INSERT INTO link").WithArgs(ts.URL, 1000000).WillReturnResult(sqlmock.NewResult(1, 1))
+	sqlMock.ExpectExec("INSERT INTO email").WithArgs("example.mail.com", ts.URL).WillReturnError(fmt.Errorf("Error 1062 ....."))
+	sqlMock.ExpectExec("UPDATE email").WithArgs(ts.URL, "example.mail.com").WillReturnError(fmt.Errorf("Some error with DB connection"))
 
 	data := url.Values{}
 	data.Set("email", "example.mail.com")
-	data.Add("link", "https://www.avito.ru/moskva/kollektsionirovanie/moneta_iz_makdonaldsa_2009709110")
+	data.Add("link", ts.URL)
 	r, err := http.NewRequest("POST", "http://localhost/", strings.NewReader(data.Encode()))
 	require.NoError(t, err)
 	r.Header.Add("Content-Type", "application/x-www-form-urlencoded")
@@ -181,7 +169,7 @@ func TestHandlerEmailExistsUpdateErrorDB(t *testing.T) {
 
 	w := httptest.NewRecorder()
 
-	sut := subscribe.Handler(db)
+	sut := subscribe.Handler(dep)
 	sut(w, r)
 
 	bodyBytes, err := ioutil.ReadAll(w.Body)
@@ -191,21 +179,18 @@ func TestHandlerEmailExistsUpdateErrorDB(t *testing.T) {
 	bodyString := string(bodyBytes)
 	assert.Equal(t, http.StatusInternalServerError, w.Code)
 	assert.Equal(t, "INTERNAL ERROR. Please try later\n", bodyString)
-
-	time.Sleep(1 * time.Second)
 }
 
 func TestHandlerEmailExistsCountErrorDB(t *testing.T) {
-	db, sqlMock, err := sqlmock.New()
-	require.NoError(t, err)
-	sqlMock.ExpectExec("INSERT INTO link").WithArgs("https://www.avito.ru/moskva/kollektsionirovanie/moneta_iz_makdonaldsa_2009709110", 1000000).WillReturnResult(sqlmock.NewResult(1, 1))
-	sqlMock.ExpectExec("INSERT INTO email").WithArgs("example.mail.com", "https://www.avito.ru/moskva/kollektsionirovanie/moneta_iz_makdonaldsa_2009709110").WillReturnError(fmt.Errorf("Error 1062 ....."))
-	sqlMock.ExpectExec("UPDATE email").WithArgs("https://www.avito.ru/moskva/kollektsionirovanie/moneta_iz_makdonaldsa_2009709110", "example.mail.com").WillReturnResult(sqlmock.NewResult(1, 1))
-	sqlMock.ExpectQuery("SELECT COUNT").WithArgs("https://www.avito.ru/moskva/kollektsionirovanie/moneta_iz_makdonaldsa_2009709110").WillReturnError(fmt.Errorf("Some error with DB connection"))
+	dep, sqlMock, ts := test.NewDepAndServer()
+	sqlMock.ExpectExec("INSERT INTO link").WithArgs(ts.URL, 1000000).WillReturnResult(sqlmock.NewResult(1, 1))
+	sqlMock.ExpectExec("INSERT INTO email").WithArgs("example.mail.com", ts.URL).WillReturnError(fmt.Errorf("Error 1062 ....."))
+	sqlMock.ExpectExec("UPDATE email").WithArgs(ts.URL, "example.mail.com").WillReturnResult(sqlmock.NewResult(1, 1))
+	sqlMock.ExpectQuery("SELECT COUNT").WithArgs(ts.URL).WillReturnError(fmt.Errorf("Some error with DB connection"))
 
 	data := url.Values{}
 	data.Set("email", "example.mail.com")
-	data.Add("link", "https://www.avito.ru/moskva/kollektsionirovanie/moneta_iz_makdonaldsa_2009709110")
+	data.Add("link", ts.URL)
 	r, err := http.NewRequest("POST", "http://localhost/", strings.NewReader(data.Encode()))
 	require.NoError(t, err)
 	r.Header.Add("Content-Type", "application/x-www-form-urlencoded")
@@ -213,7 +198,7 @@ func TestHandlerEmailExistsCountErrorDB(t *testing.T) {
 
 	w := httptest.NewRecorder()
 
-	sut := subscribe.Handler(db)
+	sut := subscribe.Handler(dep)
 	sut(w, r)
 
 	bodyBytes, err := ioutil.ReadAll(w.Body)
@@ -223,23 +208,20 @@ func TestHandlerEmailExistsCountErrorDB(t *testing.T) {
 	bodyString := string(bodyBytes)
 	assert.Equal(t, http.StatusInternalServerError, w.Code)
 	assert.Equal(t, "INTERNAL ERROR. Please try later\n", bodyString)
-
-	time.Sleep(1 * time.Second)
 }
 
 func TestHandlerEmailExistsDeleteLinkErrorDB(t *testing.T) {
-	db, sqlMock, err := sqlmock.New()
-	require.NoError(t, err)
-	sqlMock.ExpectExec("INSERT INTO link").WithArgs("https://www.avito.ru/moskva/kollektsionirovanie/moneta_iz_makdonaldsa_2009709110", 1000000).WillReturnResult(sqlmock.NewResult(1, 1))
-	sqlMock.ExpectExec("INSERT INTO email").WithArgs("example.mail.com", "https://www.avito.ru/moskva/kollektsionirovanie/moneta_iz_makdonaldsa_2009709110").WillReturnError(fmt.Errorf("Error 1062 ....."))
-	sqlMock.ExpectExec("UPDATE email").WithArgs("https://www.avito.ru/moskva/kollektsionirovanie/moneta_iz_makdonaldsa_2009709110", "example.mail.com").WillReturnResult(sqlmock.NewResult(1, 1))
+	dep, sqlMock, ts := test.NewDepAndServer()
+	sqlMock.ExpectExec("INSERT INTO link").WithArgs(ts.URL, 1000000).WillReturnResult(sqlmock.NewResult(1, 1))
+	sqlMock.ExpectExec("INSERT INTO email").WithArgs("example.mail.com", ts.URL).WillReturnError(fmt.Errorf("Error 1062 ....."))
+	sqlMock.ExpectExec("UPDATE email").WithArgs(ts.URL, "example.mail.com").WillReturnResult(sqlmock.NewResult(1, 1))
 	row := []string{"count"}
-	sqlMock.ExpectQuery("SELECT COUNT").WithArgs("https://www.avito.ru/moskva/kollektsionirovanie/moneta_iz_makdonaldsa_2009709110").WillReturnRows(sqlmock.NewRows(row).AddRow(1))
-	sqlMock.ExpectExec("DELETE FROM link").WithArgs("https://www.avito.ru/moskva/kollektsionirovanie/moneta_iz_makdonaldsa_2009709110").WillReturnError(fmt.Errorf("Some error with DB connection"))
+	sqlMock.ExpectQuery("SELECT COUNT").WithArgs(ts.URL).WillReturnRows(sqlmock.NewRows(row).AddRow(1))
+	sqlMock.ExpectExec("DELETE FROM link").WithArgs(ts.URL).WillReturnError(fmt.Errorf("Some error with DB connection"))
 
 	data := url.Values{}
 	data.Set("email", "example.mail.com")
-	data.Add("link", "https://www.avito.ru/moskva/kollektsionirovanie/moneta_iz_makdonaldsa_2009709110")
+	data.Add("link", ts.URL)
 	r, err := http.NewRequest("POST", "http://localhost/", strings.NewReader(data.Encode()))
 	require.NoError(t, err)
 	r.Header.Add("Content-Type", "application/x-www-form-urlencoded")
@@ -247,7 +229,7 @@ func TestHandlerEmailExistsDeleteLinkErrorDB(t *testing.T) {
 
 	w := httptest.NewRecorder()
 
-	sut := subscribe.Handler(db)
+	sut := subscribe.Handler(dep)
 	sut(w, r)
 
 	bodyBytes, err := ioutil.ReadAll(w.Body)
@@ -257,19 +239,16 @@ func TestHandlerEmailExistsDeleteLinkErrorDB(t *testing.T) {
 	bodyString := string(bodyBytes)
 	assert.Equal(t, http.StatusInternalServerError, w.Code)
 	assert.Equal(t, "INTERNAL ERROR. Please try later\n", bodyString)
-
-	time.Sleep(1 * time.Second)
 }
 
 func TestHandlerInsertEmailErrorDB(t *testing.T) {
-	db, sqlMock, err := sqlmock.New()
-	require.NoError(t, err)
-	sqlMock.ExpectExec("INSERT INTO link").WithArgs("https://www.avito.ru/moskva/kollektsionirovanie/moneta_iz_makdonaldsa_2009709110", 1000000).WillReturnResult(sqlmock.NewResult(1, 1))
-	sqlMock.ExpectExec("INSERT INTO email").WithArgs("example.mail.com", "https://www.avito.ru/moskva/kollektsionirovanie/moneta_iz_makdonaldsa_2009709110").WillReturnError(fmt.Errorf("Some error with DB connection"))
+	dep, sqlMock, ts := test.NewDepAndServer()
+	sqlMock.ExpectExec("INSERT INTO link").WithArgs(ts.URL, 1000000).WillReturnResult(sqlmock.NewResult(1, 1))
+	sqlMock.ExpectExec("INSERT INTO email").WithArgs("example.mail.com", ts.URL).WillReturnError(fmt.Errorf("Some error with DB connection"))
 
 	data := url.Values{}
 	data.Set("email", "example.mail.com")
-	data.Add("link", "https://www.avito.ru/moskva/kollektsionirovanie/moneta_iz_makdonaldsa_2009709110")
+	data.Add("link", ts.URL)
 	r, err := http.NewRequest("POST", "http://localhost/", strings.NewReader(data.Encode()))
 	require.NoError(t, err)
 	r.Header.Add("Content-Type", "application/x-www-form-urlencoded")
@@ -277,7 +256,7 @@ func TestHandlerInsertEmailErrorDB(t *testing.T) {
 
 	w := httptest.NewRecorder()
 
-	sut := subscribe.Handler(db)
+	sut := subscribe.Handler(dep)
 	sut(w, r)
 
 	bodyBytes, err := ioutil.ReadAll(w.Body)
@@ -287,6 +266,4 @@ func TestHandlerInsertEmailErrorDB(t *testing.T) {
 	bodyString := string(bodyBytes)
 	assert.Equal(t, http.StatusInternalServerError, w.Code)
 	assert.Equal(t, "INTERNAL ERROR. Please try later\n", bodyString)
-
-	time.Sleep(1 * time.Second)
 }
