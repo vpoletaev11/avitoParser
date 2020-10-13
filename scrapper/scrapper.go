@@ -36,10 +36,10 @@ type Dep struct {
 	DB     *sql.DB
 	Client *http.Client
 
-	sender emailSender
+	sender emailSender // interface of email sender required for testing
 
-	minsToLoop      int
-	secToGetOnePage int
+	minsToLoop      int // delay in minutes before next loop of scrapping all links
+	secToGetOnePage int // delay in seconds to scan one page
 }
 
 type emailConfig struct {
