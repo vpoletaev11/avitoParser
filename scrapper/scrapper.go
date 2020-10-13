@@ -26,12 +26,20 @@ type linkPrice struct {
 	price int
 }
 
+// Dep stores dependencies
 type Dep struct {
 	DB     *sql.DB
 	Client *http.Client
+
+	minsToLoop      int
+	secToGetOnePage int
+	senderEmail     string
+	senderEmailPass string
 }
 
+// NewDep initializes Dep
 func NewDep() Dep {
+	// Set DB
 	mySQLAddr := os.Getenv("MYSQL_ADDR")
 	dbName := os.Getenv("DB_NAME")
 	db, err := sql.Open("mysql", mySQLAddr+"/"+dbName)
@@ -40,6 +48,7 @@ func NewDep() Dep {
 	}
 	fmt.Println("Successfully connected to MySql database")
 
+	// Set http client
 	tr := &http.Transport{
 		TLSClientConfig: &tls.Config{
 			MaxVersion: tls.VersionTLS12,
@@ -47,9 +56,31 @@ func NewDep() Dep {
 	}
 	client := &http.Client{Transport: tr}
 
+	// Set timings
+	minsToLoopStr := os.Getenv("MIN_TO_SCRAPPING_ALL_LINKS")
+	minsToLoop, err := strconv.Atoi(minsToLoopStr)
+	if err != nil {
+		panic(err)
+	}
+	secToGetOnePageStr := os.Getenv("SEC_TO_GET_ONE_PAGE")
+	secToGetOnePage, err := strconv.Atoi(secToGetOnePageStr)
+	if err != nil {
+		panic(err)
+	}
+
+	// Set sender email configs
+	senderEmail := os.Getenv("SENDER_MAIL")
+	senderEmailPass := os.Getenv("MAIL_PASSWORD")
+
+	fmt.Println(minsToLoop, secToGetOnePage, senderEmail, senderEmailPass)
 	return Dep{
 		DB:     db,
 		Client: client,
+
+		minsToLoop:      minsToLoop,
+		secToGetOnePage: secToGetOnePage,
+		senderEmail:     senderEmail,
+		senderEmailPass: senderEmailPass,
 	}
 }
 
@@ -57,22 +88,15 @@ func NewDep() Dep {
 // If links prices aren't actual:
 // 1) rewrite link prices in db;
 // 2) send emails to addresses related with changed price links.
-// This func uses system variables to set timeouts (you can configure it in docker-compose.yml).
 func ComparePrices(dep Dep) {
-	minsToLoopStr := os.Getenv("MIN_TO_SCRAPPING_ALL_LINKS")
-	minsToLoop, err := strconv.Atoi(minsToLoopStr)
-	if err != nil {
-		panic(err)
-	}
-
 	for {
 		links := getLinksAndPriceFromDB(dep.DB)
 
 		changedPriceLinks := linksWithChangedPrice(dep, links)
 
-		sendMails(dep.DB, changedPriceLinks)
+		sendMails(dep, changedPriceLinks)
 
-		time.Sleep(time.Duration(minsToLoop) * time.Minute)
+		time.Sleep(time.Duration(dep.minsToLoop) * time.Minute)
 	}
 }
 
@@ -105,14 +129,7 @@ func getLinksAndPriceFromDB(db *sql.DB) []linkPrice {
 
 // linksWithChangedPrice checks if inputted links have actual price by comparing it prices with prices getted by parsing avito.ru.
 // If inputted links haven't actual price linksWithChangedPrice writes for them actual price in db.
-// This func uses system variables to set timeouts (you can configure it in docker-compose.yml).
 func linksWithChangedPrice(dep Dep, links []linkPrice) []linkPrice {
-	secToGetOnePageStr := os.Getenv("SEC_TO_GET_ONE_PAGE")
-	secToGetOnePage, err := strconv.Atoi(secToGetOnePageStr)
-	if err != nil {
-		panic(err)
-	}
-
 	changedPriceLinks := []linkPrice{}
 	for _, lp := range links {
 		price, err := dep.GetPrice(lp.link)
@@ -131,16 +148,16 @@ func linksWithChangedPrice(dep Dep, links []linkPrice) []linkPrice {
 			changedPriceLinks = append(changedPriceLinks, lp)
 		}
 
-		time.Sleep(time.Duration(secToGetOnePage) * time.Second)
+		time.Sleep(time.Duration(dep.secToGetOnePage) * time.Second)
 	}
 
 	return changedPriceLinks
 }
 
 // sendMails gets from db email addresses related with inserted links and sends to them notifications about changing price.
-func sendMails(db *sql.DB, changedPriceLinks []linkPrice) {
+func sendMails(dep Dep, changedPriceLinks []linkPrice) {
 	for _, lp := range changedPriceLinks {
-		rows, err := db.Query(getEmailsRelWithLink, lp.link)
+		rows, err := dep.DB.Query(getEmailsRelWithLink, lp.link)
 		if err != nil {
 			errhand.InternalErrorLog(err)
 			return
@@ -161,32 +178,28 @@ func sendMails(db *sql.DB, changedPriceLinks []linkPrice) {
 			emails = append(emails, email)
 		}
 
-		sendMail(emails, lp.link, lp.price)
+		dep.sendMail(emails, lp.link, lp.price)
 	}
 }
 
 // sendMail sends notifications about changing price to receivers.
 // This func uses system variables to get sender email-addres and password (you can configure it in docker-compose.yml).
-func sendMail(receiver []string, link string, price int) {
-	// Sender data.
-	from := os.Getenv("SENDER_MAIL")
-	password := os.Getenv("MAIL_PASSWORD")
-
+func (dep Dep) sendMail(receiver []string, link string, price int) {
 	// smtp server configuration.
 	smtpHost := "smtp.gmail.com"
 	smtpPort := "587"
 
-	fromL := fmt.Sprintf("From: <%s>\r\n", from)
+	fromL := fmt.Sprintf("From: <%s>\r\n", dep.senderEmail)
 	subject := "Subject: Avito parser\r\n"
 	body := "New price of " + link + " amount " + strconv.Itoa(price) + " rub."
 
 	message := []byte(fromL + subject + "\r\n" + body)
 
 	// Authentication.
-	auth := smtp.PlainAuth("", from, password, smtpHost)
+	auth := smtp.PlainAuth("", dep.senderEmail, dep.senderEmailPass, smtpHost)
 
 	// Sending email.
-	err := smtp.SendMail(smtpHost+":"+smtpPort, auth, from, receiver, message)
+	err := smtp.SendMail(smtpHost+":"+smtpPort, auth, dep.senderEmail, receiver, message)
 	if err != nil {
 		fmt.Println(err)
 		return
@@ -194,13 +207,13 @@ func sendMail(receiver []string, link string, price int) {
 }
 
 // GetPrice parses avito.ru ad page to get price.
-func (d Dep) GetPrice(link string) (int, error) {
+func (dep Dep) GetPrice(link string) (int, error) {
 	req, err := http.NewRequest("GET", link, nil)
 	if err != nil {
 		return 0, err
 	}
 
-	resp, err := d.Client.Do(req)
+	resp, err := dep.Client.Do(req)
 	if err != nil {
 		return 0, err
 	}
