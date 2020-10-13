@@ -14,12 +14,12 @@ import (
 	"github.com/DATA-DOG/go-sqlmock"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/vpoletaev11/avitoParser/scrapper"
 	"github.com/vpoletaev11/avitoParser/subscribe"
-	"github.com/vpoletaev11/avitoParser/test.go"
 )
 
 func TestHandlerSuccess(t *testing.T) {
-	dep, sqlMock, ts := test.NewDepAndServer()
+	dep, sqlMock, ts := newTestDepAndServer()
 	sqlMock.ExpectExec("INSERT INTO link").WithArgs(ts.URL, 1000000).WillReturnResult(sqlmock.NewResult(1, 1))
 	sqlMock.ExpectExec("INSERT INTO email").WithArgs("example.mail.com", ts.URL).WillReturnResult(sqlmock.NewResult(1, 1))
 
@@ -46,7 +46,7 @@ func TestHandlerSuccess(t *testing.T) {
 }
 
 func TestHandlerBadLink(t *testing.T) {
-	dep, _, _ := test.NewDepAndServer()
+	dep, _, _ := newTestDepAndServer()
 	data := url.Values{}
 	data.Set("email", "example.mail.com")
 	data.Add("link", "wrong link")
@@ -70,7 +70,7 @@ func TestHandlerBadLink(t *testing.T) {
 }
 
 func TestHandlerLinkExists(t *testing.T) {
-	dep, sqlMock, ts := test.NewDepAndServer()
+	dep, sqlMock, ts := newTestDepAndServer()
 	sqlMock.ExpectExec("INSERT INTO link").WithArgs(ts.URL, 1000000).WillReturnError(fmt.Errorf("Error 1062 ....."))
 	sqlMock.ExpectExec("INSERT INTO email").WithArgs("example.mail.com", ts.URL).WillReturnResult(sqlmock.NewResult(1, 1))
 
@@ -97,7 +97,7 @@ func TestHandlerLinkExists(t *testing.T) {
 }
 
 func TestHandlerInsertLinkErrorDB(t *testing.T) {
-	dep, sqlMock, ts := test.NewDepAndServer()
+	dep, sqlMock, ts := newTestDepAndServer()
 	sqlMock.ExpectExec("INSERT INTO link").WithArgs(ts.URL, 1000000).WillReturnError(fmt.Errorf("Some error with DB connection"))
 
 	data := url.Values{}
@@ -123,7 +123,7 @@ func TestHandlerInsertLinkErrorDB(t *testing.T) {
 }
 
 func TestHandlerEmailExists(t *testing.T) {
-	dep, sqlMock, ts := test.NewDepAndServer()
+	dep, sqlMock, ts := newTestDepAndServer()
 	sqlMock.ExpectExec("INSERT INTO link").WithArgs(ts.URL, 1000000).WillReturnResult(sqlmock.NewResult(1, 1))
 	sqlMock.ExpectExec("INSERT INTO email").WithArgs("example.mail.com", ts.URL).WillReturnError(fmt.Errorf("Error 1062 ....."))
 	sqlMock.ExpectExec("UPDATE email").WithArgs(ts.URL, "example.mail.com").WillReturnResult(sqlmock.NewResult(1, 1))
@@ -154,7 +154,7 @@ func TestHandlerEmailExists(t *testing.T) {
 }
 
 func TestHandlerEmailExistsUpdateErrorDB(t *testing.T) {
-	dep, sqlMock, ts := test.NewDepAndServer()
+	dep, sqlMock, ts := newTestDepAndServer()
 	sqlMock.ExpectExec("INSERT INTO link").WithArgs(ts.URL, 1000000).WillReturnResult(sqlmock.NewResult(1, 1))
 	sqlMock.ExpectExec("INSERT INTO email").WithArgs("example.mail.com", ts.URL).WillReturnError(fmt.Errorf("Error 1062 ....."))
 	sqlMock.ExpectExec("UPDATE email").WithArgs(ts.URL, "example.mail.com").WillReturnError(fmt.Errorf("Some error with DB connection"))
@@ -182,7 +182,7 @@ func TestHandlerEmailExistsUpdateErrorDB(t *testing.T) {
 }
 
 func TestHandlerEmailExistsCountErrorDB(t *testing.T) {
-	dep, sqlMock, ts := test.NewDepAndServer()
+	dep, sqlMock, ts := newTestDepAndServer()
 	sqlMock.ExpectExec("INSERT INTO link").WithArgs(ts.URL, 1000000).WillReturnResult(sqlmock.NewResult(1, 1))
 	sqlMock.ExpectExec("INSERT INTO email").WithArgs("example.mail.com", ts.URL).WillReturnError(fmt.Errorf("Error 1062 ....."))
 	sqlMock.ExpectExec("UPDATE email").WithArgs(ts.URL, "example.mail.com").WillReturnResult(sqlmock.NewResult(1, 1))
@@ -211,7 +211,7 @@ func TestHandlerEmailExistsCountErrorDB(t *testing.T) {
 }
 
 func TestHandlerEmailExistsDeleteLinkErrorDB(t *testing.T) {
-	dep, sqlMock, ts := test.NewDepAndServer()
+	dep, sqlMock, ts := newTestDepAndServer()
 	sqlMock.ExpectExec("INSERT INTO link").WithArgs(ts.URL, 1000000).WillReturnResult(sqlmock.NewResult(1, 1))
 	sqlMock.ExpectExec("INSERT INTO email").WithArgs("example.mail.com", ts.URL).WillReturnError(fmt.Errorf("Error 1062 ....."))
 	sqlMock.ExpectExec("UPDATE email").WithArgs(ts.URL, "example.mail.com").WillReturnResult(sqlmock.NewResult(1, 1))
@@ -242,7 +242,7 @@ func TestHandlerEmailExistsDeleteLinkErrorDB(t *testing.T) {
 }
 
 func TestHandlerInsertEmailErrorDB(t *testing.T) {
-	dep, sqlMock, ts := test.NewDepAndServer()
+	dep, sqlMock, ts := newTestDepAndServer()
 	sqlMock.ExpectExec("INSERT INTO link").WithArgs(ts.URL, 1000000).WillReturnResult(sqlmock.NewResult(1, 1))
 	sqlMock.ExpectExec("INSERT INTO email").WithArgs("example.mail.com", ts.URL).WillReturnError(fmt.Errorf("Some error with DB connection"))
 
@@ -267,3 +267,55 @@ func TestHandlerInsertEmailErrorDB(t *testing.T) {
 	assert.Equal(t, http.StatusInternalServerError, w.Code)
 	assert.Equal(t, "INTERNAL ERROR. Please try later\n", bodyString)
 }
+
+// NewTestDepAndServer returns: dependencies, Sqlmock interface to add mocks and httptest server, that emulating avito ad page
+func newTestDepAndServer() (scrapper.Dep, sqlmock.Sqlmock, *httptest.Server) {
+	db, sqlMock, err := sqlmock.New()
+	if err != nil {
+		panic(err)
+	}
+
+	ts := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		fmt.Fprintln(w, avitoAdHTML)
+	}))
+
+	dep := scrapper.Dep{
+		DB:     db,
+		Client: ts.Client(),
+	}
+
+	return dep, sqlMock, ts
+}
+
+const avitoAdHTML = `<!DOCTYPE html>
+            
+<html> <head> <script>
+ try {
+ window.firstHiddenTime = document.visibilityState === 'hidden' ? 0 : Infinity;
+ document.addEventListener('visibilitychange', function (event) {
+ window.firstHiddenTime = Math.min(window.firstHiddenTime, event.timeStamp);
+ }, { once: true });
+ if ('PerformanceLongTaskTiming' in window) {
+ var globalStats = window.__statsLongTasks = { tasks: [] };
+ globalStats.observer = new PerformanceObserver(function(list) {
+ globalStats.tasks = globalStats.tasks.concat(list.getEntries());
+ });
+ globalStats.observer.observe({ entryTypes: ['longtask'] });
+ }
+ if (PerformanceObserver && (PerformanceObserver.supportedEntryTypes || []).some(function(e) {
+ return e === 'element'
+ })) {
+ if (!window.oet) {
+ window.oet = [];
+ }
+ new PerformanceObserver(function(l) {
+ window.oet.push.apply(window.oet, l.getEntries());
+ }).observe({ entryTypes: ['element'] });
+ }
+ } catch (e) {
+ console.error(e);
+ }
+ </script>
+    <script>
+ window.dataLayer = [{"dynx_user":"a","dynx_region":"moskva","dynx_prodid":2009709110,"dynx_price":1000000,"dynx_category":"kollektsionirovanie","dynx_vertical":4,"dynx_pagetype":"item"},{"pageType":"Item","itemID":2009709110,"vertical":"GENERAL","categoryId":36,"categorySlug":"kollektsionirovanie","microCategoryId":320,"locationId":637640,"isShop":0,"isClientType1":0,"itemPrice":1000000,"withDelivery":1,"sostoyanie":"Б\/у","vid_tovara":"Монеты","type_of_trade":"Продаю своё"}];`

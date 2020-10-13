@@ -31,7 +31,7 @@ func Handler(dep scrapper.Dep) http.HandlerFunc {
 		link := r.PostForm.Get("link")
 
 		// link validation
-		price, err := dep.GetPrice(link)
+		price, err := scrapper.GetPrice(dep, link)
 		if err != nil {
 			errhand.InternalError(err, w)
 			return

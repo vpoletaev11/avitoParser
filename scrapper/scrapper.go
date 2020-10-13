@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"fmt"
 	"io/ioutil"
+	"log"
 	"net/http"
 	"net/smtp"
 	"os"
@@ -26,15 +27,45 @@ type linkPrice struct {
 	price int
 }
 
+type emailSender interface {
+	sendEmail(receiver []string, link string, price int)
+}
+
 // Dep stores dependencies
 type Dep struct {
 	DB     *sql.DB
 	Client *http.Client
 
+	sender emailSender
+
 	minsToLoop      int
 	secToGetOnePage int
+}
+
+type emailConfig struct {
+	smtpHost        string
+	smtpPort        string
 	senderEmail     string
 	senderEmailPass string
+}
+
+// sendEmail sends notifications about changing price to receivers.
+func (e emailConfig) sendEmail(receiver []string, link string, price int) {
+	fromL := fmt.Sprintf("From: <%s>\r\n", e.senderEmail)
+	subject := "Subject: Avito parser\r\n"
+	body := "New price of " + link + " amount " + strconv.Itoa(price) + " rub."
+
+	message := []byte(fromL + subject + "\r\n" + body)
+
+	// Authentication.
+	auth := smtp.PlainAuth("", e.senderEmail, e.senderEmailPass, e.smtpHost)
+
+	// Sending email.
+	err := smtp.SendMail(e.smtpHost+":"+e.smtpPort, auth, e.senderEmail, receiver, message)
+	if err != nil {
+		errhand.InternalErrorLog(err)
+		return
+	}
 }
 
 // NewDep initializes Dep
@@ -46,6 +77,15 @@ func NewDep() Dep {
 	if err != nil {
 		panic(err)
 	}
+	for i := 0; i <= 30; i++ {
+		err := db.Ping()
+
+		if err == nil {
+			break
+		}
+		log.Println("Trying connect to db")
+		time.Sleep(1 * time.Second)
+	}
 	fmt.Println("Successfully connected to MySql database")
 
 	// Set http client
@@ -55,6 +95,14 @@ func NewDep() Dep {
 		},
 	}
 	client := &http.Client{Transport: tr}
+
+	// Set sender email configs
+	sender := emailConfig{
+		smtpHost:        os.Getenv("SENDER_HOST"),
+		smtpPort:        os.Getenv("SENDER_PORT"),
+		senderEmail:     os.Getenv("SENDER_MAIL"),
+		senderEmailPass: os.Getenv("MAIL_PASSWORD"),
+	}
 
 	// Set timings
 	minsToLoopStr := os.Getenv("MIN_TO_SCRAPPING_ALL_LINKS")
@@ -68,19 +116,14 @@ func NewDep() Dep {
 		panic(err)
 	}
 
-	// Set sender email configs
-	senderEmail := os.Getenv("SENDER_MAIL")
-	senderEmailPass := os.Getenv("MAIL_PASSWORD")
-
-	fmt.Println(minsToLoop, secToGetOnePage, senderEmail, senderEmailPass)
 	return Dep{
 		DB:     db,
 		Client: client,
 
+		sender: sender,
+
 		minsToLoop:      minsToLoop,
 		secToGetOnePage: secToGetOnePage,
-		senderEmail:     senderEmail,
-		senderEmailPass: senderEmailPass,
 	}
 }
 
@@ -118,7 +161,7 @@ func getLinksAndPriceFromDB(db *sql.DB) []linkPrice {
 		)
 		if err != nil {
 			errhand.InternalErrorLog(err)
-			continue
+			return []linkPrice{}
 		}
 
 		links = append(links, lp)
@@ -132,7 +175,7 @@ func getLinksAndPriceFromDB(db *sql.DB) []linkPrice {
 func linksWithChangedPrice(dep Dep, links []linkPrice) []linkPrice {
 	changedPriceLinks := []linkPrice{}
 	for _, lp := range links {
-		price, err := dep.GetPrice(lp.link)
+		price, err := GetPrice(dep, lp.link)
 		if err != nil {
 			errhand.InternalErrorLog(err)
 			continue
@@ -172,42 +215,18 @@ func sendMails(dep Dep, changedPriceLinks []linkPrice) {
 			)
 			if err != nil {
 				errhand.InternalErrorLog(err)
-				continue
+				return
 			}
 
 			emails = append(emails, email)
 		}
 
-		dep.sendMail(emails, lp.link, lp.price)
-	}
-}
-
-// sendMail sends notifications about changing price to receivers.
-// This func uses system variables to get sender email-addres and password (you can configure it in docker-compose.yml).
-func (dep Dep) sendMail(receiver []string, link string, price int) {
-	// smtp server configuration.
-	smtpHost := "smtp.gmail.com"
-	smtpPort := "587"
-
-	fromL := fmt.Sprintf("From: <%s>\r\n", dep.senderEmail)
-	subject := "Subject: Avito parser\r\n"
-	body := "New price of " + link + " amount " + strconv.Itoa(price) + " rub."
-
-	message := []byte(fromL + subject + "\r\n" + body)
-
-	// Authentication.
-	auth := smtp.PlainAuth("", dep.senderEmail, dep.senderEmailPass, smtpHost)
-
-	// Sending email.
-	err := smtp.SendMail(smtpHost+":"+smtpPort, auth, dep.senderEmail, receiver, message)
-	if err != nil {
-		fmt.Println(err)
-		return
+		dep.sender.sendEmail(emails, lp.link, lp.price)
 	}
 }
 
 // GetPrice parses avito.ru ad page to get price.
-func (dep Dep) GetPrice(link string) (int, error) {
+func GetPrice(dep Dep, link string) (int, error) {
 	req, err := http.NewRequest("GET", link, nil)
 	if err != nil {
 		return 0, err

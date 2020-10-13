@@ -12,7 +12,9 @@ services:
             MYSQL_ADDR: root:@tcp(mysql:3306)
             DB_NAME: "avitoParser"
 
-            SENDER_MAIL: email (gmail only) used as sender
+            SENDER_HOST: smtp.gmail.com
+            SENDER_PORT: 587
+            SENDER_MAIL: email used as sender
             MAIL_PASSWORD: email account password
             
             # below settings allow to scan maximum ~300 links, if you need more, you should reconfigure it
