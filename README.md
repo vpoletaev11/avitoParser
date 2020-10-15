@@ -1,5 +1,8 @@
 # Avito Parser
 
+[![CircleCI](https://circleci.com/gh/vpoletaev11/avitoParser.svg?style=svg)](https://circleci.com/gh/vpoletaev11/avitoParser)
+[![Coverage Status](https://coveralls.io/repos/github/vpoletaev11/avitoParser/badge.svg?branch=master)](https://coveralls.io/github/vpoletaev11/avitoParser?branch=master)
+
 Схема работы приложения находится в файле appScheme.pdf
 
 ## Запуск проекта
