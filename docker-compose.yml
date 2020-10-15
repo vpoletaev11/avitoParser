@@ -12,7 +12,7 @@ services:
             MYSQL_ADDR: root:@tcp(mysql:3306)
             DB_NAME: "avitoParser"
 
-            SENDER_HOST: smtp.gmail.com 
+            SENDER_HOST: smtp.gmail.com
             SENDER_PORT: 587
             SENDER_MAIL: example@gmail.com 
             MAIL_PASSWORD: password
